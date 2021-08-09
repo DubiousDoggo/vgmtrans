@@ -14,14 +14,14 @@ class QHexView : public QAbstractScrollArea {
 
 public:
   explicit QHexView(QWidget* parent = nullptr);
-  QHexDocument* document() { return m_document; };
+  QHexDocument* document() const { return m_document; };
   void setDocument(QHexDocument* document);
   void setReadOnly(bool b);
   // Set how many bytes should be displayed per line
   void setHexLineWidth(qint8 width);
   // How many bytes are displayed per line
   qint8 getLineWidth() const { return m_linewidth; };
-  void setMetaSelection(qint64 offset) { selected_meta_offset = offset; };
+  void setSelectedItem(VGMItem* item);
   QHexCursor* cursor() const { return m_cursor; };
 
 protected:
@@ -66,7 +66,7 @@ private:
 
 private:
   QHexCursor* m_cursor;
-  qint64 selected_meta_offset;
+  VGMItem *selected_item;
   QHexDocument* m_document;
   QTimer* m_blinktimer;
   bool m_readonly;

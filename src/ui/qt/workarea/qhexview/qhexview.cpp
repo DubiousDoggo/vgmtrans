@@ -1,5 +1,6 @@
 #include "qhexview.h"
 #include "document/buffer/qmemorybuffer.h"
+#include "QtVGMRoot.h"
 #include <QFontDatabase>
 #include <QApplication>
 #include <QPaintEvent>
@@ -16,7 +17,8 @@
 #define DOCUMENT_WHEEL_LINES 3
 
 QHexView::QHexView(QWidget *parent)
-    : QAbstractScrollArea(parent), m_document(nullptr), m_readonly(false), m_cursor(nullptr) {
+    : QAbstractScrollArea(parent), m_document(nullptr), m_readonly(false), m_cursor(nullptr),
+      selected_item(nullptr) {
   QFont f = QFontDatabase::systemFont(QFontDatabase::FixedFont);
 
   if (f.styleHint() != QFont::TypeWriter) {
@@ -73,6 +75,13 @@ void QHexView::setHexLineWidth(qint8 width) {
   if (m_cursor)
     m_cursor->setLineWidth(width);
 }
+
+void QHexView::setSelectedItem(VGMItem *item) {
+  selected_item = item;
+  if (selected_item) {
+    this->renderLine((selected_item->dwOffset - document()->vgmFile()->dwOffset) / hexLineWidth());
+  }
+};
 
 bool QHexView::event(QEvent *e) {
   if (m_document && (e->type() == QEvent::ToolTip)) {
@@ -834,6 +843,7 @@ void QHexView::applyBasicStyle(QTextCursor &textcursor, const QByteArray &rawlin
   QPalette palette = qApp->palette();
 
   // Draw 00 and FF bytes in a different color
+  /*
   QColor color = palette.color(QPalette::WindowText);
 
   if (color.lightness() < 50) {
@@ -856,6 +866,7 @@ void QHexView::applyBasicStyle(QTextCursor &textcursor, const QByteArray &rawlin
     textcursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor, factor);
     textcursor.setCharFormat(charformat);
   }
+  */
 }
 
 void QHexView::applyMetadata(QTextCursor &textcursor, quint64 line, int chars_per_data) const {
@@ -872,7 +883,6 @@ void QHexView::applyMetadata(QTextCursor &textcursor, quint64 line, int chars_pe
       charformat.setBackground(mi.background);
     if (mi.foreground.isValid())
       charformat.setForeground(mi.foreground);
-    // if (!mi.comment.isEmpty()) charformat.setUnderlineStyle(QTextCharFormat::SingleUnderline);
 
     textcursor.setPosition(mi.start * chars_per_data);
     textcursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
@@ -971,6 +981,50 @@ void QHexView::applyCursorHex(QTextCursor &textcursor, quint64 line) const {
   textcursor.setCharFormat(charformat);
 }
 
+void QHexView::applyMetaSelection(QTextCursor &textcursor, quint64 line, int factor) const {
+  if (!selected_item) {
+    return;
+  }
+
+  struct {
+    uint32_t line, column;
+  } startsel, endsel;
+
+  auto file_offset = selected_item->dwOffset - document()->vgmFile()->dwOffset;
+  startsel.line = file_offset / hexLineWidth();
+  startsel.column = file_offset % hexLineWidth();
+
+  auto selection_end = file_offset + selected_item->unLength - 1;
+  endsel.line = selection_end / hexLineWidth();
+  endsel.column = selection_end % hexLineWidth();
+
+  if (line < startsel.line || line > endsel.line) {
+    return;
+  }
+
+  if (startsel.line == endsel.line) {
+    textcursor.setPosition(startsel.column * factor);
+    textcursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
+                            ((endsel.column - startsel.column + 1) * factor) - 1);
+  } else {
+    if (line == startsel.line) {
+      textcursor.setPosition(startsel.column * factor);
+    } else {
+      textcursor.setPosition(0);
+    }
+
+    if (line == endsel.line) {
+      textcursor.movePosition(QTextCursor::Right, QTextCursor::KeepAnchor,
+                              ((endsel.column + 1) * factor) - 1);
+    } else {
+      textcursor.movePosition(QTextCursor::EndOfLine, QTextCursor::KeepAnchor);
+    }
+  }
+
+  QTextCharFormat charformat;
+  charformat.setForeground(Qt::red);
+  textcursor.setCharFormat(charformat);
+}
 
 void QHexView::drawAddress(QPainter *painter, const QPalette &palette, const QRect &linerect,
                            quint64 line) {
@@ -1005,6 +1059,7 @@ void QHexView::drawHex(QPainter *painter, const QPalette &palette, const QRect &
   this->applyDocumentStyles(painter, &textdocument);
   this->applyBasicStyle(textcursor, rawline, 3);
   this->applyMetadata(textcursor, line, 3);
+  this->applyMetaSelection(textcursor, line, 3);
   this->applySelection(textcursor, line, 3);
   this->applyCursorHex(textcursor, line);
 
@@ -1031,6 +1086,7 @@ void QHexView::drawAscii(QPainter *painter, const QPalette &palette, const QRect
   this->applyDocumentStyles(painter, &textdocument);
   this->applyBasicStyle(textcursor, rawline);
   this->applyMetadata(textcursor, line);
+  this->applyMetaSelection(textcursor, line);
   this->applySelection(textcursor, line);
   this->applyCursorAscii(textcursor, line);
 
