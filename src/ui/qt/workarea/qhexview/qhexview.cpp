@@ -76,12 +76,27 @@ void QHexView::setHexLineWidth(qint8 width) {
     m_cursor->setLineWidth(width);
 }
 
+/** 
+ * Sets the highlighted VGM item
+ * Pass nullptr to clear selection
+ * The item will be scrolled to if it is not on screen
+ */
 void QHexView::setSelectedItem(VGMItem *item) {
   selected_item = item;
   if (selected_item) {
-    this->renderLine((selected_item->dwOffset - document()->vgmFile()->dwOffset) / hexLineWidth());
+    auto selected_line =
+        (selected_item->dwOffset - document()->vgmFile()->dwOffset) / hexLineWidth();
+
+    if (!isLineVisible(selected_line)) {
+      QScrollBar *vscrollbar = this->verticalScrollBar();
+      int scrollPos = static_cast<int>(std::max(0ui64, selected_line - this->visibleLines() / 2) /
+                                       documentSizeFactor());
+      vscrollbar->setValue(scrollPos);
+      return; // don't need to update viewport again
+    }
   }
-};
+  this->viewport()->update();
+}
 
 bool QHexView::event(QEvent *e) {
   if (m_document && (e->type() == QEvent::ToolTip)) {
