@@ -44,26 +44,22 @@ VGMFileView::VGMFileView(VGMFile *vgmfile)
   m_splitter->addWidget(m_treeview);
   m_splitter->setSizes(QList<int>() << 900 << 270);
 
-  connect(
-      m_treeview, &VGMFileTreeView::currentItemChanged,
-      [file_ofs = m_vgmfile->dwOffset, hexview = m_hexview](QTreeWidgetItem *item,
-                                                            [[maybe_unused]] QTreeWidgetItem *) {
-        auto vgmitem = static_cast<VGMItem *>(item->data(0, Qt::UserRole).value<void *>());
-        hexview->setSelectedItem(vgmitem);
-      });
+  connect(m_treeview, &VGMFileTreeView::currentItemChanged,
+          [&](QTreeWidgetItem *item, QTreeWidgetItem *) {
+            auto vgmitem = static_cast<VGMItem *>(item->data(0, Qt::UserRole).value<void *>());
+            m_hexview->setSelectedItem(vgmitem);
+          });
 
   connect(m_hexview->cursor(), &QHexCursor::positionChanged, [&]() {
     const QHexCursor *cursor = m_hexview->cursor();
-    qtVGMRoot.AddLogItem(
-        new LogItem(L"cursor position changed: " + std::to_wstring(cursor->position().offset()),
-                    LOG_LEVEL_DEBUG, L"VGMFileView"));
-
-    auto base_offset = m_vgmfile->dwOffset;
-    auto *item = m_vgmfile->GetItemFromOffset(base_offset + cursor->position().offset(), false);
-    qtVGMRoot.AddLogItem(new LogItem(L"selecting event in tree: " + item->GetDescription(),
-                                     LOG_LEVEL_DEBUG, L"VGMFileView"));
-    auto widget_item = m_treeview->getTreeWidgetItem(item);
-    m_treeview->setCurrentItem(widget_item);
+    const auto &base_offset = m_vgmfile->dwOffset;
+    VGMItem *item = m_vgmfile->GetItemFromOffset(base_offset + cursor->position().offset(), false);
+    if (item) {
+      auto widget_item = m_treeview->getTreeWidgetItem(item);
+      m_treeview->setCurrentItem(widget_item);
+    } else {
+      m_treeview->clearSelection();
+    }
   });
 
   connect(new QShortcut(QKeySequence::ZoomIn, this), &QShortcut::activated,
